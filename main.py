@@ -1,13 +1,14 @@
-import re
-import requests
-from bs4 import BeautifulSoup
-
 # Step 1: Create the urls
-BASE_URL = "https://www.seek.com.au/"
-LISTING_LOCATION_JOB_URL = "https://www.seek.com.au/junior-developer-jobs/in-Melbourne-VIC-3000"
 
-# def addSearchTermsToURL(url:str, searchTerms:list) -> str:
-#     return url + "/".join(searchTerms)
+def addSearchTermsToURL(url:str, searchTermsFile:str) -> str:
+    with open('searchParams.json', 'r') as f:
+        searchParams = json.load(f)
+    scrapingList = []
+    # Not currently handling locations
+    for term in searchParams['searchTerms']:
+        hunt = url + '-'.join(term.split(' ')) + "-jobs/in-Melbourne-VIC-3000"
+        scrapingList.append(hunt)
+    return scrapingList
 
 def addPageNumberToURL(url:str, pageNum:int) -> str:
     return url + "?page=" + str(pageNum)
@@ -57,23 +58,52 @@ def getJobData(baseurl:str, jobLink:str) -> dict:
         }
     return None
 
+def getAllJobPostings(url:str, iterationLimit:int=1000) -> list:
+    links = []
+    for i in range(iterationLimit):
+        page = addPageNumberToURL(url, i)
+        jobs = getJobLinks(getPageContent(page))
+        if len(jobs) <= 0:
+            break
+
+        print("Jobs scraped from page " + str(i) + ": " + str(len(jobs)))
+        links += jobs
+    print("Total jobs scraped: " + str(len(links)))
+    print()
+    return list(set(links))
+
+import re, json, requests
+from bs4 import BeautifulSoup
+from multiprocessing.pool import ThreadPool as Pool
         
+ITERATION_LIMIT = 1000
+BASE_URL = "https://www.seek.com.au/"
 
+LISTING_LOCATION_JOB_URL = "https://www.seek.com.au/junior-developer-jobs/in-Melbourne-VIC-3000"
+
+def worker(url, iterationLimit, jobs):
+    jobs[url] = getAllJobPostings(url, iterationLimit)
         
-links = []
-for i in range(1, 2):
-    url = addPageNumberToURL(LISTING_LOCATION_JOB_URL, i)
-    jobs = getJobLinks(getPageContent(url))
-    if len(jobs) <= 0:
-        break
+if __name__ == "__main__":
+    searches = addSearchTermsToURL(BASE_URL, 'searchParams.json')
 
-    links += jobs
-    print("Page " + str(i) + " done")
+    pool = Pool(len(searches))
+    jobs = {}
+    for search in searches:
+        pool.apply_async(worker, (search, ITERATION_LIMIT, jobs))
+    
+    pool.close()
+    pool.join()
 
-links = list(set(links))
-print(len(links))
+    with open('job_links.json', 'w') as f:
+        json.dump(jobs, f)
 
-print(getJobData(BASE_URL, links[0]))
-# getJobData("https://www.seek.com.au/job/68163743?type=standard#sol=49771ce0c397768622365dc367e9d5676b969375", "")
+    # jobs = getAllJobPostings(searches[0], ITERATION_LIMIT)
 
+   
+    # print("Number of Jobs found:", len(jobs))
 
+    # print({
+    #     'id': jobs[0],
+    #     'data': getJobData(BASE_URL, jobs[0])
+    # })
