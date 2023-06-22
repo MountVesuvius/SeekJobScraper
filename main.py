@@ -1,5 +1,9 @@
 import re, json, requests
 from multiprocessing.pool import ThreadPool as Pool
+import nltk
+from nltk.tokenize import word_tokenize
+import collections
+
 from webScrape import *
         
 ITERATION_LIMIT = 1000
@@ -25,17 +29,47 @@ def worker(url:str, iterationLimit:int, store:dict) -> None:
         jobs -= overlap
     store[url] = jobs
 
+
+def cleanText(text):
+    stop_words = set(nltk.corpus.stopwords.words('english'))
+
+    word_tokens = word_tokenize(text)
+    filtered_sentence = [w for w in word_tokens if not w in stop_words]
+    joined = ' '.join(filtered_sentence)
+
+    pattern = r'\s[\.,!?;:\’\/]+\s' # Remove punctuation surrounded by spaces
+    return re.sub(pattern, ' ', joined)
+
+    return cleaned_text
+
+ 
+
         
 if __name__ == "__main__":
-    searches = addSearchTermsToURL(BASE_URL, 'searchParams.json')
+    nltk.download('stopwords')
+    # searches = addSearchTermsToURL(BASE_URL, 'searchParams.json')
 
-    pool = Pool(len(searches))
-    jobs = {}
-    for search in searches:
-        pool.apply_async(worker, (search, ITERATION_LIMIT, jobs))
+    # # Job Collection
+    # pool = Pool(len(searches))
+    # jobs = {}
+    # for search in searches:
+    #     pool.apply_async(worker, (search, ITERATION_LIMIT, jobs))
 
-    pool.close()
-    pool.join()
+    # pool.close()
+    # pool.join()
+    # with open('unique_jobs.json', 'w') as f:
+        # json.dump(jobs, f, indent=4)
 
-    with open('unique_jobs.json', 'w') as f:
-        json.dump(jobs, f, indent=4)
+    # Job Data Collection
+    with open('unique_jobs.json', 'r') as f:
+        jobs = json.load(f)
+
+    urls = [i for i in jobs]
+    text = getJobData(BASE_URL, jobs[urls[0]][0])['jobBody']
+    cleaned = cleanText(text.lower())
+    frequency = collections.Counter(word_tokenize(cleaned))
+    print(frequency)
+
+
+    # a = [set(i.split(' ')) for i in text.split('. ')]
+    # print(a)
